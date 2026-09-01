@@ -1,0 +1,21 @@
+# Ignore raw datasets
+data/
+data/raw/
+data/raw/own/
+
+# Ignore Python environment
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Ignore heavy binaries and models
+models/*.pth
+*.pth
+*.mp4
+*.mkv
+*.csv
+*.json
+
+# Ignore OS metadata
+.DS_Store
