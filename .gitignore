@@ -17,5 +17,9 @@ models/*.pth
 *.csv
 *.json
 
+# Allow model weights to be tracked
+!models/
+!models/*.pth
+
 # Ignore OS metadata
 .DS_Store
