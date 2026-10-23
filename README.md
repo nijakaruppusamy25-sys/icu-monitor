@@ -16,11 +16,4 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Run an evaluation
 
-```bash
-python scripts/evaluate_rr_depth.py
-python scripts/evaluate_hr_pos.py
-```
-
-The respiratory evaluator reports mean absolute error for paced trials. The heart-rate evaluators report estimates only; reference heart-rate data is not currently included.
