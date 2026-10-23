@@ -6,19 +6,19 @@
   <title>Contactless Non-Invasive Heartbeat & Respiratory Rate Monitor - ICU Ward 2</title>
   <style>
     :root {
-      --bg-page: #edeae2;
-      --bg-panel: #f6f4ee;
-      --bg-sub: #e4e0d5;
-      --border: #c5bfb0;
-      --border-strong: #9c9585;
-      --text-main: #1f2421;
-      --text-muted: #5a605d;
-      --accent-hr: #1f6f50;
-      --accent-rr: #1d5b79;
-      --warn-bg: #efe3c2;
-      --warn-text: #6e4f0c;
-      --ok-bg: #d9eadf;
-      --ok-text: #164f36;
+      --bg-page: #f3f6fb;
+      --bg-panel: #ffffff;
+      --bg-sub: #f7f9fc;
+      --border: #dbe3ef;
+      --border-strong: #c6d2e2;
+      --text-main: #1d2939;
+      --text-muted: #63738a;
+      --accent-hr: #00805f;
+      --accent-rr: #2454e8;
+      --warn-bg: #fff4dc;
+      --warn-text: #8a5b00;
+      --ok-bg: #e6f6ef;
+      --ok-text: #08734f;
     }
 
     * {
@@ -32,6 +32,9 @@
       background-color: var(--bg-page);
       color: var(--text-main);
       padding: 20px;
+      min-height: 100vh;
+      border: 4px solid #7566f5;
+      border-radius: 14px;
     }
 
     /* Top Header matching Sketch 1 */
@@ -52,16 +55,17 @@
 
     .project-title-box {
       background-color: var(--bg-panel);
-      border: 2px solid var(--border-strong);
-      padding: 10px 18px;
-      font-size: 1.15rem;
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      font-size: 0.82rem;
       font-weight: 700;
       letter-spacing: 0.3px;
+      box-shadow: 0 1px 3px rgba(29, 41, 57, 0.05);
     }
 
     .ward-box {
-      background-color: var(--bg-sub);
-      border: 2px solid var(--border-strong);
+      background-color: var(--bg-panel);
+      border: 1px solid var(--border);
       padding: 7px 16px;
       font-size: 1rem;
       font-weight: 700;
@@ -71,17 +75,18 @@
 
     .hr-rr-header-box {
       background-color: var(--bg-panel);
-      border: 2px solid var(--border-strong);
-      padding: 10px 22px;
-      font-size: 1.15rem;
+      border: 1px solid var(--border);
+      padding: 10px 16px;
+      font-size: 0.82rem;
       font-weight: 700;
     }
 
     /* Page 1: 8-Patient Grid (4 columns x 2 rows) */
     .ward-container {
       background-color: var(--bg-panel);
-      border: 2px solid var(--border-strong);
+      border: 1px solid var(--border);
       padding: 20px;
+      box-shadow: 0 2px 8px rgba(29, 41, 57, 0.04);
     }
 
     .patients-grid {
@@ -97,13 +102,14 @@
     }
 
     .patient-frame {
-      background-color: var(--bg-page);
-      border: 2px solid var(--border-strong);
+      background-color: var(--bg-panel);
+      border: 1px solid var(--border);
       padding: 14px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
       min-height: 255px;
+      box-shadow: 0 1px 4px rgba(29, 41, 57, 0.04);
     }
 
     .frame-top-bar {
@@ -125,7 +131,7 @@
     .small-btn {
       background-color: var(--bg-panel);
       color: var(--text-main);
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--border);
       padding: 3px 8px;
       font-size: 0.76rem;
       font-weight: 600;
@@ -175,9 +181,9 @@
 
     .nav-btn {
       width: 100%;
-      background-color: var(--bg-sub);
-      color: var(--text-main);
-      border: 2px solid var(--border-strong);
+      background-color: #eef2ff;
+      color: #3f36b8;
+      border: 1px solid #c9c5ff;
       padding: 8px 10px;
       font-size: 0.85rem;
       font-weight: 700;
@@ -186,7 +192,7 @@
     }
 
     .nav-btn:hover {
-      background-color: #d6d0c2;
+      background-color: #e4e7ff;
     }
 
     /* Page 2: Single Patient Full Telemetry View matching Sketch 2 */
@@ -196,8 +202,9 @@
 
     .page2-outer {
       background-color: var(--bg-panel);
-      border: 2px solid var(--border-strong);
+      border: 1px solid var(--border);
       padding: 20px;
+      box-shadow: 0 2px 8px rgba(29, 41, 57, 0.04);
     }
 
     .page2-top-bar {
@@ -219,9 +226,9 @@
     }
 
     .mode-btn {
-      background-color: var(--bg-page);
+      background-color: var(--bg-panel);
       color: var(--text-main);
-      border: 2px solid var(--border-strong);
+      border: 1px solid var(--border);
       padding: 7px 14px;
       font-size: 0.86rem;
       font-weight: 700;
@@ -229,22 +236,23 @@
     }
 
     .mode-btn.active {
-      background-color: var(--text-main);
-      color: var(--bg-panel);
+      background-color: #263349;
+      border-color: #263349;
+      color: #ffffff;
     }
 
     select, input {
-      background-color: var(--bg-page);
+      background-color: var(--bg-panel);
       color: var(--text-main);
-      border: 2px solid var(--border-strong);
+      border: 1px solid var(--border);
       padding: 6px 10px;
       font-size: 0.86rem;
       font-weight: 600;
     }
 
     .patient-details-banner {
-      background-color: var(--bg-page);
-      border: 2px solid var(--border-strong);
+      background-color: var(--bg-sub);
+      border: 1px solid var(--border);
       padding: 12px 16px;
       margin-bottom: 18px;
       display: flex;
@@ -284,12 +292,13 @@
     }
 
     .vital-column {
-      background-color: var(--bg-page);
-      border: 2px solid var(--border-strong);
+      background-color: var(--bg-panel);
+      border: 1px solid var(--border);
       padding: 16px;
       display: flex;
       flex-direction: column;
       gap: 12px;
+      box-shadow: 0 1px 4px rgba(29, 41, 57, 0.03);
     }
 
     .vital-col-header {
@@ -301,29 +310,29 @@
     }
 
     .vital-col-title {
-      font-size: 1.1rem;
+      font-size: 0.82rem;
       font-weight: 700;
       text-transform: uppercase;
     }
 
     .vital-readout {
-      font-size: 2.2rem;
+      font-size: 1.8rem;
       font-weight: 700;
     }
 
     .vital-status-tag {
-      padding: 4px 10px;
-      font-size: 0.8rem;
+      padding: 4px 8px;
+      font-size: 0.68rem;
       font-weight: 700;
-      border: 1px solid var(--border-strong);
-      background-color: var(--bg-sub);
+      border: 1px solid var(--border);
+      background-color: #f5f7fb;
     }
 
     .video-frame-box {
       width: 100%;
       height: 300px;
-      background-color: var(--bg-sub);
-      border: 2px solid var(--border-strong);
+      background-color: #eaf0f8;
+      border: 1px solid var(--border-strong);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -338,7 +347,7 @@
 
     .wave-box {
       background-color: var(--bg-panel);
-      border: 2px solid var(--border-strong);
+      border: 1px solid var(--border);
       padding: 10px;
     }
 
@@ -353,15 +362,18 @@
     canvas {
       width: 100%;
       height: 110px;
-      background-color: var(--bg-page);
-      border: 1px solid var(--border);
+      background-color: #ffffff;
+      border: 1px solid #e4eaf3;
       display: block;
+      background-image: linear-gradient(to right, rgba(36, 84, 232, 0.045) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(36, 84, 232, 0.045) 1px, transparent 1px);
+      background-size: 20px 20px;
     }
 
     .error-banner {
       background-color: var(--warn-bg);
       color: var(--warn-text);
-      border: 2px solid var(--border-strong);
+      border: 1px solid #f1d38d;
       padding: 10px 14px;
       margin-bottom: 14px;
       font-size: 0.88rem;
@@ -373,7 +385,7 @@
     .modal-overlay {
       position: fixed;
       inset: 0;
-      background-color: rgba(31, 36, 33, 0.55);
+      background-color: rgba(29, 41, 57, 0.45);
       display: none;
       align-items: center;
       justify-content: center;
@@ -382,12 +394,13 @@
 
     .modal-card {
       background-color: var(--bg-panel);
-      border: 2px solid var(--border-strong);
+      border: 1px solid var(--border);
       padding: 22px;
       width: 400px;
       display: flex;
       flex-direction: column;
       gap: 10px;
+      box-shadow: 0 16px 40px rgba(29, 41, 57, 0.18);
     }
 
     .modal-card h3 {

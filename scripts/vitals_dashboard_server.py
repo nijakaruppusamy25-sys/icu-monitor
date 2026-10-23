@@ -41,6 +41,12 @@ import live_icu_monitor as lim
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("Ward2TelemetryServer")
 
+FPS_NOMINAL = 30.0
+WINDOW_SEC = 10.0
+EMA_ALPHA = 0.15
+HR_MAX_JUMP_BPM = 15.0
+RR_MAX_JUMP_BRPM = 6.0
+
 try:
     import pyrealsense2 as rs
     HAS_REALSENSE_LIB = True
@@ -90,10 +96,7 @@ def evaluate_rr_window(depth_buffer, fs=29.89, clip_id=""):
     sub_f, sub_p = freqs[v_idx], psd[v_idx]
     rr_val = float(sub_f[int(np.argmax(sub_p))] * 60.0)
 
-    if "breathhold" in clip_id.lower() and std_val < 0.08:
-        rr_val = 0.0
-        rr_status = "APNEA"
-    elif rr_val < 9.0:
+    if rr_val < 9.0:
         rr_status = "BRADYPNEA"
     elif rr_val > 22.0:
         rr_status = "TACHYPNEA"
@@ -275,7 +278,7 @@ class WardTelemetryManager:
         val_g = float(np.mean(rgb_tp[:, :, 1])) if rgb_tp.size > 0 else 0.0
         return val_d + 0.25 * val_g
 
-    def _preload_window(self, cap_rgb, cap_depth, n_frames, rgb_buffer, depth_buffer):
+    def _preload_window(self, cap_rgb, cap_depth, n_frames, rgb_buffer, depth_buffer, detect_pose=True):
         face_roi, chest_roi = None, None
         for idx in range(n_frames):
             ret_c, rgb_img = cap_rgb.read()
@@ -287,7 +290,7 @@ class WardTelemetryManager:
                 if len(d_raw.shape) == 3
                 else d_raw.astype(np.float32)
             )
-            if idx % 20 == 0:
+            if detect_pose and idx % 20 == 0:
                 kpts = lim.detect_landmarks_yolo(rgb_img)
                 face_roi = lim.get_face_roi_from_kpts(kpts, rgb_img.shape, face_roi)
                 chest_roi = call_chest_roi(kpts, depth_img, depth_img.shape, chest_roi)
@@ -311,19 +314,41 @@ class WardTelemetryManager:
 
     def _precompute_ward_clips(self):
         """Pre-evaluates assigned dataset clips so all 8 patients on Page 1 show real HR & RR values."""
-        for rec in self.recordings:
+        assigned_clip_ids = {
+            patient.get("recording_id")
+            for patient in self.patients.values()
+            if patient.get("recording_id")
+        }
+        assigned_recordings = [
+            rec for rec in self.recordings if rec["id"] in assigned_clip_ids
+        ]
+        logger.info(
+            "Precomputing vitals for %d assigned recordings (of %d available); "
+            "pose inference is skipped during cache warm-up.",
+            len(assigned_recordings),
+            len(self.recordings),
+        )
+
+        for rec in assigned_recordings:
             cid = rec["id"]
             if cid in self.clip_cache:
                 continue
             try:
                 cap_c = cv2.VideoCapture(rec["rgb_path"])
                 cap_d = cv2.VideoCapture(rec["depth_path"])
+                if not cap_c.isOpened() or not cap_d.isOpened():
+                    logger.warning("Could not open recording pair for cache warm-up: %s", cid)
+                    cap_c.release()
+                    cap_d.release()
+                    continue
                 fs = cap_c.get(cv2.CAP_PROP_FPS) or 29.89
                 if fs < 10.0:
                     fs = 29.89
                 n_pre = int(fs * 6.0)
                 rgb_buf, d_buf = [], []
-                self._preload_window(cap_c, cap_d, n_pre, rgb_buf, d_buf)
+                self._preload_window(
+                    cap_c, cap_d, n_pre, rgb_buf, d_buf, detect_pose=False
+                )
                 cap_c.release()
                 cap_d.release()
 
@@ -357,9 +382,6 @@ class WardTelemetryManager:
             self._thread.start()
 
     def _run_loop(self):
-        FPS_NOMINAL = 29.89
-        BUFFER_SEC = 15.0
-
         while not self._stop_event.is_set():
             slot = self.active_slot
             patient = self.patients[slot]
@@ -396,7 +418,7 @@ class WardTelemetryManager:
 
                     align = rs.align(rs.stream.color)
                     signal_fs = 30.0
-                    buffer_len = int(BUFFER_SEC * signal_fs)
+                    buffer_len = int(WINDOW_SEC * signal_fs)
                     rgb_buffer = collections.deque(maxlen=buffer_len)
                     depth_buffer = collections.deque(maxlen=buffer_len)
                     face_roi, chest_roi = None, None
@@ -422,10 +444,23 @@ class WardTelemetryManager:
                 clip_id = rec["id"]
                 cap_rgb = cv2.VideoCapture(rec["rgb_path"])
                 cap_depth = cv2.VideoCapture(rec["depth_path"])
+                if not cap_rgb.isOpened() or not cap_depth.isOpened():
+                    if cap_rgb is not None:
+                        cap_rgb.release()
+                    if cap_depth is not None:
+                        cap_depth.release()
+                    self.active_detail.update({
+                        "slot": slot,
+                        "camera_error": f"Could not open recording pair: {rec['id']}",
+                    })
+                    logger.error("Could not open recording pair: %s", rec["id"])
+                    self.notify()
+                    time.sleep(1.5)
+                    continue
 
                 recorded_fps = cap_rgb.get(cv2.CAP_PROP_FPS)
                 signal_fs = recorded_fps if (recorded_fps and recorded_fps > 10.0) else FPS_NOMINAL
-                buffer_len = int(BUFFER_SEC * signal_fs)
+                buffer_len = int(WINDOW_SEC * signal_fs)
 
                 rgb_buffer = collections.deque(maxlen=buffer_len)
                 depth_buffer = collections.deque(maxlen=buffer_len)
@@ -435,7 +470,11 @@ class WardTelemetryManager:
                 self.active_detail["camera_error"] = None
 
             smoothed_hr, smoothed_rr = None, None
+            rejected_hr_count = 0
+            rejected_rr_count = 0
             total_frames = 0
+            update_every_n_frames = max(1, int(round(signal_fs)))
+            min_analysis_samples = int(signal_fs * 6)
             fps_counter = 0
             fps_timer = time.time()
             stream_fps = signal_fs
@@ -459,6 +498,7 @@ class WardTelemetryManager:
                         if not ret_c or not ret_d:
                             cap_rgb.set(cv2.CAP_PROP_POS_FRAMES, 0)
                             cap_depth.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                            time.sleep(0.01)
                             continue
                         depth_img = (
                             cv2.cvtColor(d_frame_raw, cv2.COLOR_BGR2GRAY).astype(np.float32)
@@ -466,9 +506,15 @@ class WardTelemetryManager:
                             else d_frame_raw.astype(np.float32)
                         )
 
-                    # Clinical monochrome BONE depth map (avoids rainbow coloring)
-                    depth_norm = cv2.normalize(depth_img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-                    depth_display = cv2.applyColorMap(depth_norm, cv2.COLORMAP_BONE)
+                    if use_live:
+                        depth_norm = cv2.normalize(
+                            depth_img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U
+                        )
+                        depth_display = cv2.applyColorMap(depth_norm, cv2.COLORMAP_JET)
+                    elif len(d_frame_raw.shape) == 3:
+                        depth_display = d_frame_raw.copy()
+                    else:
+                        depth_display = cv2.cvtColor(d_frame_raw, cv2.COLOR_GRAY2BGR)
 
                     if total_frames % 6 == 0:
                         kpts_rgb = lim.detect_landmarks_yolo(rgb_img)
@@ -488,14 +534,22 @@ class WardTelemetryManager:
                         fps_counter = 0
                         fps_timer = time.time()
 
-                    if total_frames == 1 or total_frames % 10 == 0:
+                    if (
+                        total_frames % update_every_n_frames == 0
+                        and len(rgb_buffer) >= min_analysis_samples
+                        and len(depth_buffer) >= min_analysis_samples
+                    ):
                         raw_hr, hr_status, bvp_wave = evaluate_hr_window(rgb_buffer, fs=signal_fs)
                         raw_rr, rr_status, rr_wave = evaluate_rr_window(depth_buffer, fs=signal_fs, clip_id=clip_id)
 
-                        if raw_hr is not None:
-                            smoothed_hr = raw_hr if smoothed_hr is None else (0.15 * raw_hr + 0.85 * smoothed_hr)
-                        if raw_rr is not None:
-                            smoothed_rr = raw_rr if smoothed_rr is None else (0.20 * raw_rr + 0.80 * smoothed_rr)
+                        smoothed_hr, rejected_hr_count = lim.update_smoothed_vital(
+                            smoothed_hr, raw_hr, rejected_hr_count,
+                            HR_MAX_JUMP_BPM, lim.HR_MAX_STEP_PER_SEC,
+                        )
+                        smoothed_rr, rejected_rr_count = lim.update_smoothed_vital(
+                            smoothed_rr, raw_rr, rejected_rr_count,
+                            RR_MAX_JUMP_BRPM, lim.RR_MAX_STEP_PER_SEC,
+                        )
 
                         fx1, fy1, fx2, fy2 = face_roi
                         cx1, cy1, cx2, cy2 = chest_roi
@@ -520,9 +574,13 @@ class WardTelemetryManager:
                         _, buf_rgb = cv2.imencode(".jpg", rgb_small, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
                         _, buf_depth = cv2.imencode(".jpg", depth_small, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
 
-                        patient["hr_bpm"] = round(smoothed_hr, 1) if smoothed_hr is not None else None
+                        patient["hr_bpm"] = (
+                            round(smoothed_hr, 1) if raw_hr is not None and smoothed_hr is not None else None
+                        )
                         patient["hr_status"] = hr_status
-                        patient["rr_brpm"] = round(smoothed_rr, 1) if smoothed_rr is not None else None
+                        patient["rr_brpm"] = (
+                            round(smoothed_rr, 1) if raw_rr is not None and smoothed_rr is not None else None
+                        )
                         patient["rr_status"] = rr_status
                         patient["condition"] = format_condition(hr_status, rr_status, patient["manual_condition"])
 
